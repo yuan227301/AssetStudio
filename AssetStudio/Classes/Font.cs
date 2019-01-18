@@ -9,14 +9,14 @@ namespace AssetStudio
     {
         public byte[] m_FontData;
 
-        public Font(AssetPreloadData preloadData) : base(preloadData)
+        public Font(ObjectReader reader) : base(reader)
         {
             if ((version[0] == 5 && version[1] >= 5) || version[0] > 5)//5.5 and up
             {
                 var m_LineSpacing = reader.ReadSingle();
-                var m_DefaultMaterial = sourceFile.ReadPPtr();
+                var m_DefaultMaterial = new PPtr<Material>(reader);
                 var m_FontSize = reader.ReadSingle();
-                var m_Texture = sourceFile.ReadPPtr();
+                var m_Texture = new PPtr<Texture>(reader);
                 int m_AsciiStartOffset = reader.ReadInt32();
                 var m_Tracking = reader.ReadSingle();
                 var m_CharacterSpacing = reader.ReadInt32();
@@ -68,7 +68,7 @@ namespace AssetStudio
                 }
 
                 int m_ConvertCase = reader.ReadInt32();
-                PPtr m_DefaultMaterial = sourceFile.ReadPPtr();
+                var m_DefaultMaterial = new PPtr<Material>(reader);
 
                 int m_CharacterRects_size = reader.ReadInt32();
                 for (int i = 0; i < m_CharacterRects_size; i++)
@@ -89,11 +89,11 @@ namespace AssetStudio
                     if (version[0] >= 4)
                     {
                         var flipped = reader.ReadBoolean();
-                        reader.AlignStream(4);
+                        reader.AlignStream();
                     }
                 }
 
-                PPtr m_Texture = sourceFile.ReadPPtr();
+                var m_Texture = new PPtr<Texture>(reader);
 
                 int m_KerningValues_size = reader.ReadInt32();
                 for (int i = 0; i < m_KerningValues_size; i++)
@@ -106,7 +106,7 @@ namespace AssetStudio
                 if (version[0] <= 3)
                 {
                     var m_GridFont = reader.ReadBoolean();
-                    reader.AlignStream(4);
+                    reader.AlignStream();
                 }
                 else { float m_PixelScale = reader.ReadSingle(); }
 

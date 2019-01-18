@@ -7,11 +7,11 @@ namespace AssetStudio
 {
     public abstract class Component : EditorExtension
     {
-        public PPtr m_GameObject;
+        public PPtr<GameObject> m_GameObject;
 
-        protected Component(AssetPreloadData preloadData) : base(preloadData)
+        protected Component(ObjectReader reader) : base(reader)
         {
-            m_GameObject = sourceFile.ReadPPtr();
+            m_GameObject = new PPtr<GameObject>(reader);
         }
     }
 }

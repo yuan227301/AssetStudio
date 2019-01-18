@@ -5,22 +5,32 @@ using System.Text;
 
 namespace AssetStudio
 {
-    class AnimatorOverrideController : NamedObject
+    public class AnimationClipOverride
     {
-        public PPtr m_Controller;
-        public PPtr[][] m_Clips;
+        public PPtr<AnimationClip> m_OriginalClip;
+        public PPtr<AnimationClip> m_OverrideClip;
 
-        public AnimatorOverrideController(AssetPreloadData preloadData) : base(preloadData)
+        public AnimationClipOverride(ObjectReader reader)
         {
-            m_Controller = sourceFile.ReadPPtr();
+            m_OriginalClip = new PPtr<AnimationClip>(reader);
+            m_OverrideClip = new PPtr<AnimationClip>(reader);
+        }
+    }
+
+    public sealed class AnimatorOverrideController : RuntimeAnimatorController
+    {
+        public PPtr<RuntimeAnimatorController> m_Controller;
+        public AnimationClipOverride[] m_Clips;
+
+        public AnimatorOverrideController(ObjectReader reader) : base(reader)
+        {
+            m_Controller = new PPtr<RuntimeAnimatorController>(reader);
 
             int numOverrides = reader.ReadInt32();
-            m_Clips = new PPtr[numOverrides][];
+            m_Clips = new AnimationClipOverride[numOverrides];
             for (int i = 0; i < numOverrides; i++)
             {
-                m_Clips[i] = new PPtr[2];
-                m_Clips[i][0] = sourceFile.ReadPPtr();
-                m_Clips[i][1] = sourceFile.ReadPPtr();
+                m_Clips[i] = new AnimationClipOverride(reader);
             }
         }
     }

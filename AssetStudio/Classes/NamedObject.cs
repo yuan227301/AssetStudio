@@ -9,7 +9,7 @@ namespace AssetStudio
     {
         public string m_Name;
 
-        public NamedObject(AssetPreloadData preloadData) : base(preloadData)
+        protected NamedObject(ObjectReader reader) : base(reader)
         {
             m_Name = reader.ReadAlignedString();
         }

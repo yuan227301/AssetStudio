@@ -7,14 +7,14 @@ namespace AssetStudio
 {
     public sealed class Animator : Behaviour
     {
-        public PPtr m_Avatar;
-        public PPtr m_Controller;
-        public bool m_HasTransformHierarchy;
+        public PPtr<Avatar> m_Avatar;
+        public PPtr<RuntimeAnimatorController> m_Controller;
+        public bool m_HasTransformHierarchy = true;
 
-        public Animator(AssetPreloadData preloadData) : base(preloadData)
+        public Animator(ObjectReader reader) : base(reader)
         {
-            m_Avatar = sourceFile.ReadPPtr();
-            m_Controller = sourceFile.ReadPPtr();
+            m_Avatar = new PPtr<Avatar>(reader);
+            m_Controller = new PPtr<RuntimeAnimatorController>(reader);
             var m_CullingMode = reader.ReadInt32();
 
             if (version[0] > 4 || (version[0] == 4 && version[1] >= 5)) //4.5 and up
@@ -25,13 +25,13 @@ namespace AssetStudio
             var m_ApplyRootMotion = reader.ReadBoolean();
             if (version[0] == 4 && version[1] >= 5) //4.5 and up - 5.0 down
             {
-                reader.AlignStream(4);
+                reader.AlignStream();
             }
 
             if (version[0] >= 5) //5.0 and up
             {
                 var m_LinearVelocityBlending = reader.ReadBoolean();
-                reader.AlignStream(4);
+                reader.AlignStream();
             }
 
             if (version[0] < 4 || (version[0] == 4 && version[1] < 5)) //4.5 down
@@ -50,13 +50,13 @@ namespace AssetStudio
             }
             if (version[0] >= 5 && version[0] < 2018) //5.0 and up - 2018 down
             {
-                reader.AlignStream(4);
+                reader.AlignStream();
             }
 
             if (version[0] >= 2018) //2018 and up
             {
                 var m_KeepAnimatorControllerStateOnDisable = reader.ReadBoolean();
-                reader.AlignStream(4);
+                reader.AlignStream();
             }
         }
     }

@@ -4,7 +4,7 @@
 
 namespace AssetStudio
 {
-	void Fbx::Exporter::Export(String^ path, IImported^ imported, bool EulerFilter, float filterPrecision, bool allFrames, bool allBones, bool skins, float boneSize, bool flatInbetween, int versionIndex, bool isAscii)
+	void Fbx::Exporter::Export(String^ path, IImported^ imported, bool eulerFilter, float filterPrecision, bool allFrames, bool allBones, bool skins, float boneSize, float scaleFactor, bool flatInbetween, int versionIndex, bool isAscii)
 	{
 		FileInfo^ file = gcnew FileInfo(path);
 		DirectoryInfo^ dir = file->Directory;
@@ -16,16 +16,16 @@ namespace AssetStudio
 		Directory::SetCurrentDirectory(dir->FullName);
 		path = Path::GetFileName(path);
 
-		Exporter^ exporter = gcnew Exporter(path, imported, allFrames, allBones, skins, boneSize, versionIndex, isAscii, true);
+		Exporter^ exporter = gcnew Exporter(path, imported, allFrames, allBones, skins, boneSize, scaleFactor, versionIndex, isAscii, true);
 		exporter->ExportMorphs(imported, false, flatInbetween);
-		exporter->ExportAnimations(EulerFilter, filterPrecision, flatInbetween);
+		exporter->ExportAnimations(eulerFilter, filterPrecision, flatInbetween);
 		exporter->pExporter->Export(exporter->pScene);
 		delete exporter;
 
 		Directory::SetCurrentDirectory(currentDir);
 	}
 
-	void Fbx::Exporter::ExportMorph(String^ path, IImported^ imported, bool morphMask, bool flatInbetween, bool skins, float boneSize, int versionIndex, bool isAscii)
+	void Fbx::Exporter::ExportMorph(String^ path, IImported^ imported, bool morphMask, bool flatInbetween, bool skins, float boneSize, float scaleFactor, int versionIndex, bool isAscii)
 	{
 		FileInfo^ file = gcnew FileInfo(path);
 		DirectoryInfo^ dir = file->Directory;
@@ -37,7 +37,7 @@ namespace AssetStudio
 		Directory::SetCurrentDirectory(dir->FullName);
 		path = Path::GetFileName(path);
 
-		Exporter^ exporter = gcnew Exporter(path, imported, false, true, skins, boneSize, versionIndex, isAscii, false);
+		Exporter^ exporter = gcnew Exporter(path, imported, false, true, skins, boneSize, scaleFactor, versionIndex, isAscii, false);
 		exporter->ExportMorphs(imported, morphMask, flatInbetween);
 		exporter->pExporter->Export(exporter->pScene);
 		delete exporter;
@@ -45,7 +45,7 @@ namespace AssetStudio
 		Directory::SetCurrentDirectory(currentDir);
 	}
 
-	Fbx::Exporter::Exporter(String^ path, IImported^ imported, bool allFrames, bool allBones, bool skins, float boneSize, int versionIndex, bool isAscii, bool normals)
+	Fbx::Exporter::Exporter(String^ path, IImported^ imported, bool allFrames, bool allBones, bool skins, float boneSize, float scaleFactor, int versionIndex, bool isAscii, bool normals)
 	{
 		this->imported = imported;
 		exportSkins = skins;
@@ -72,6 +72,7 @@ namespace AssetStudio
 		IOS_REF.SetBoolProp(EXP_FBX_GLOBAL_SETTINGS, true);
 
 		FbxGlobalSettings& globalSettings = pScene->GetGlobalSettings();
+		globalSettings.SetSystemUnit(FbxSystemUnit(scaleFactor));
 
 		cDest = StringToCharArray(path);
 		pExporter = FbxExporter::Create(pScene, "");
@@ -110,7 +111,7 @@ namespace AssetStudio
 		}
 
 		pMeshNodes = imported->MeshList != nullptr ? new FbxArray<FbxNode*>(imported->MeshList->Count) : NULL;
-		ExportFrame(pScene->GetRootNode(), imported->FrameList[0]);
+		ExportFrame(pScene->GetRootNode(), imported->RootFrame);
 
 		if (imported->MeshList != nullptr)
 		{
@@ -206,7 +207,7 @@ namespace AssetStudio
 			return nullptr;
 		}
 		HashSet<String^>^ exportFrames = gcnew HashSet<String^>();
-		SearchHierarchy(imported->FrameList[0], exportFrames);
+		SearchHierarchy(imported->RootFrame, exportFrames);
 		return exportFrames;
 	}
 
@@ -227,9 +228,10 @@ namespace AssetStudio
 			{
 				for (int i = 0; i < boneList->Count; i++)
 				{
-					if (!exportFrames->Contains(boneList[i]->Name))
+					String^ boneName = boneList[i]->Path->Substring(boneList[i]->Path->LastIndexOf('/') + 1);
+					if (!exportFrames->Contains(boneName))
 					{
-						ImportedFrame^ boneParent = ImportedHelpers::FindFrame(boneList[i]->Name, imported->FrameList[0]);
+						ImportedFrame^ boneParent = imported->RootFrame->FindFrameByPath(boneList[i]->Path);
 						while (boneParent != nullptr)
 						{
 							exportFrames->Add(boneParent->Name);
@@ -262,7 +264,7 @@ namespace AssetStudio
 				for (int j = 0; j < boneList->Count; j++)
 				{
 					ImportedBone^ bone = boneList[j];
-					boneNames->Add(bone->Name);
+					boneNames->Add(bone->Path);
 				}
 			}
 		}
@@ -287,9 +289,9 @@ namespace AssetStudio
 				Marshal::FreeHGlobal((IntPtr)pName);
 			}
 
-			pFrameNode->LclScaling.Set(FbxDouble3(frame->LocalScale[0], frame->LocalScale[1], frame->LocalScale[2]));
-			pFrameNode->LclRotation.Set(FbxDouble3(frame->LocalRotation[0], frame->LocalRotation[1], frame->LocalRotation[2]));
-			pFrameNode->LclTranslation.Set(FbxDouble3(frame->LocalPosition[0], frame->LocalPosition[1], frame->LocalPosition[2]));
+			pFrameNode->LclScaling.Set(FbxDouble3(frame->LocalScale.X, frame->LocalScale.Y, frame->LocalScale.Z));
+			pFrameNode->LclRotation.Set(FbxDouble3(frame->LocalRotation.X, frame->LocalRotation.Y, frame->LocalRotation.Z));
+			pFrameNode->LclTranslation.Set(FbxDouble3(frame->LocalPosition.X, frame->LocalPosition.Y, frame->LocalPosition.Z));
 			pParentNode->AddChild(pFrameNode);
 
 			if (imported->MeshList != nullptr && ImportedHelpers::FindMesh(frame, imported->MeshList) != nullptr)
@@ -306,8 +308,8 @@ namespace AssetStudio
 
 	void Fbx::Exporter::ExportMesh(FbxNode* pFrameNode, ImportedMesh^ meshList, bool normals)
 	{
-		int lastSlash = meshList->Name->LastIndexOf('/');
-		String^ frameName = lastSlash < 0 ? meshList->Name : meshList->Name->Substring(lastSlash + 1);
+		int lastSlash = meshList->Path->LastIndexOf('/');
+		String^ frameName = lastSlash < 0 ? meshList->Path : meshList->Path->Substring(lastSlash + 1);
 		List<ImportedBone^>^ boneList = meshList->BoneList;
 		bool hasBones;
 		if (exportSkins && boneList != nullptr)
@@ -329,22 +331,8 @@ namespace AssetStudio
 				for (int i = 0; i < boneList->Count; i++)
 				{
 					ImportedBone^ bone = boneList[i];
-					String^ boneName = bone->Name;
-					char* pBoneName = NULL;
-					try
-					{
-						pBoneName = StringToCharArray(boneName);
-						FbxNode* foundNode = pScene->GetRootNode()->FindChild(pBoneName);
-						if (foundNode == NULL)
-						{
-							throw gcnew Exception(gcnew String("Couldn't find frame ") + boneName + gcnew String(" used by the bone"));
-						}
-						pBoneNodeList->Add(foundNode);
-					}
-					finally
-					{
-						Marshal::FreeHGlobal((IntPtr)pBoneName);
-					}
+					FbxNode* lFrame = FindNodeByPath(bone->Path, false);
+					pBoneNodeList->Add(lFrame);
 				}
 			}
 
@@ -421,7 +409,7 @@ namespace AssetStudio
 						for (int j = 0; j < vertexList->Count; j++)
 						{
 							ImportedVertexWithColour^ vert = (ImportedVertexWithColour^)vertexList[j];
-							lGeometryElementVertexColor->GetDirectArray().Add(FbxColor(vert->Colour.Red, vert->Colour.Green, vert->Colour.Blue, vert->Colour.Alpha));
+							lGeometryElementVertexColor->GetDirectArray().Add(FbxColor(vert->Colour.R, vert->Colour.G, vert->Colour.B, vert->Colour.A));
 						}
 					}
 
@@ -463,64 +451,57 @@ namespace AssetStudio
 							else
 							{
 								FbxString lShadingName = "Phong";
-								Color4 diffuse = mat->Diffuse;
-								Color4 ambient = mat->Ambient;
-								Color4 emissive = mat->Emissive;
-								Color4 specular = mat->Specular;
-								float specularPower = mat->Power;
+								Color diffuse = mat->Diffuse;
+								Color ambient = mat->Ambient;
+								Color emissive = mat->Emissive;
+								Color specular = mat->Specular;
+								Color reflection = mat->Reflection;
 								pMat = FbxSurfacePhong::Create(pScene, pMatName);
-								pMat->Diffuse.Set(FbxDouble3(diffuse.Red, diffuse.Green, diffuse.Blue));
-								pMat->DiffuseFactor.Set(FbxDouble(diffuse.Alpha));
-								pMat->Ambient.Set(FbxDouble3(ambient.Red, ambient.Green, ambient.Blue));
-								pMat->AmbientFactor.Set(FbxDouble(ambient.Alpha));
-								pMat->Emissive.Set(FbxDouble3(emissive.Red, emissive.Green, emissive.Blue));
-								pMat->EmissiveFactor.Set(FbxDouble(emissive.Alpha));
-								pMat->Specular.Set(FbxDouble3(specular.Red, specular.Green, specular.Blue));
-								pMat->SpecularFactor.Set(FbxDouble(specular.Alpha));
-								pMat->Shininess.Set(specularPower);
+								pMat->Diffuse.Set(FbxDouble3(diffuse.R, diffuse.G, diffuse.B));
+								pMat->DiffuseFactor.Set(FbxDouble(diffuse.A));
+								pMat->Ambient.Set(FbxDouble3(ambient.R, ambient.G, ambient.B));
+								pMat->AmbientFactor.Set(FbxDouble(ambient.A));
+								pMat->Emissive.Set(FbxDouble3(emissive.R, emissive.G, emissive.B));
+								pMat->EmissiveFactor.Set(FbxDouble(emissive.A));
+								pMat->Specular.Set(FbxDouble3(specular.R, specular.G, specular.B));
+								pMat->SpecularFactor.Set(FbxDouble(specular.A));
+								pMat->Reflection.Set(FbxDouble3(reflection.R, reflection.G, reflection.B));
+								pMat->ReflectionFactor.Set(FbxDouble(reflection.A));
+								pMat->Shininess.Set(FbxDouble(mat->Shininess));
+								pMat->TransparencyFactor.Set(FbxDouble(mat->Transparency));
 								pMat->ShadingModel.Set(lShadingName);
-
 								foundMat = pMaterials->GetCount();
 								pMaterials->Add(pMat);
 							}
 							pMeshNode->AddMaterial(pMat);
 
 							bool hasTexture = false;
-							FbxFileTexture* pTextureDiffuse = ExportTexture(ImportedHelpers::FindTexture((String^)mat->Textures[0], imported->TextureList), pMesh);
-							if (pTextureDiffuse != NULL)
-							{
-								LinkTexture(mat, 0, pTextureDiffuse, pMat->Diffuse);
-								hasTexture = true;
-							}
 
-							FbxFileTexture* pTextureAmbient = ExportTexture(ImportedHelpers::FindTexture((String^)mat->Textures[1], imported->TextureList), pMesh);
-							if (pTextureAmbient != NULL)
+							for each (ImportedMaterialTexture^ texture in mat->Textures)
 							{
-								LinkTexture(mat, 1, pTextureAmbient, pMat->Ambient);
-								hasTexture = true;
-							}
-
-							FbxFileTexture* pTextureEmissive = ExportTexture(ImportedHelpers::FindTexture((String^)mat->Textures[2], imported->TextureList), pMesh);
-							if (pTextureEmissive != NULL)
-							{
-								LinkTexture(mat, 2, pTextureEmissive, pMat->Emissive);
-								hasTexture = true;
-							}
-
-							FbxFileTexture* pTextureSpecular = ExportTexture(ImportedHelpers::FindTexture((String^)mat->Textures[3], imported->TextureList), pMesh);
-							if (pTextureSpecular != NULL)
-							{
-								LinkTexture(mat, 3, pTextureSpecular, pMat->Specular);
-								hasTexture = true;
-							}
-
-							if (mat->Textures->Length > 4)
-							{
-								FbxFileTexture* pTextureBump = ExportTexture(ImportedHelpers::FindTexture((String^)mat->Textures[4], imported->TextureList), pMesh);
-								if (pTextureBump != NULL)
+								auto pTexture = ExportTexture(ImportedHelpers::FindTexture(texture->Name, imported->TextureList));
+								if (pTexture != NULL)
 								{
-									LinkTexture(mat, 4, pTextureBump, pMat->Bump);
-									hasTexture = true;
+									if (texture->Dest == 0)
+									{
+										LinkTexture(texture, pTexture, pMat->Diffuse);
+										hasTexture = true;
+									}
+									else if (texture->Dest == 1)
+									{
+										LinkTexture(texture, pTexture, pMat->NormalMap);
+										hasTexture = true;
+									}
+									else if (texture->Dest == 2)
+									{
+										LinkTexture(texture, pTexture, pMat->Specular);
+										hasTexture = true;
+									}
+									else if (texture->Dest == 3)
+									{
+										LinkTexture(texture, pTexture, pMat->Bump);
+										hasTexture = true;
+									}
 								}
 							}
 
@@ -547,17 +528,17 @@ namespace AssetStudio
 						}
 						array<float>^ uv = vertex->UV;
 						if (uv != nullptr)
-							lGeometryElementUV->GetDirectArray().Add(FbxVector2(uv[0], -uv[1]));
+							lGeometryElementUV->GetDirectArray().Add(FbxVector2(uv[0], uv[1]));
 						if (normals)
 						{
 							Vector4 tangent = vertex->Tangent;
-							lGeometryElementTangent->GetDirectArray().Add(FbxVector4(tangent.X, tangent.Y, tangent.Z, -tangent.W));
+							lGeometryElementTangent->GetDirectArray().Add(FbxVector4(tangent.X, tangent.Y, tangent.Z, tangent.W));
 						}
 
-						if (hasBones)
+						if (hasBones && vertex->BoneIndices != nullptr)
 						{
-							array<unsigned char>^ boneIndices = vertex->BoneIndices;
-							array<float>^ weights4 = vertex->Weights;
+							auto boneIndices = vertex->BoneIndices;
+							auto weights4 = vertex->Weights;
 							for (int k = 0; k < weights4->Length; k++)
 							{
 								if (boneIndices[k] < boneList->Count && weights4[k] > 0)
@@ -630,7 +611,42 @@ namespace AssetStudio
 		}
 	}
 
-	FbxFileTexture* Fbx::Exporter::ExportTexture(ImportedTexture^ matTex, FbxMesh* pMesh)
+	FbxNode* Fbx::Exporter::FindNodeByPath(String ^ path, bool recursive)
+	{
+		array<String^>^ splitPath = path->Split('/');
+		FbxNode* lNode = pScene->GetRootNode();
+		for (int i = 0; i < splitPath->Length; i++)
+		{
+			String^ frameName = splitPath[i];
+			char* pNodeName = NULL;
+			try
+			{
+				pNodeName = StringToCharArray(frameName);
+				FbxNode* foundNode;
+				if (recursive && i == 0)
+				{
+					foundNode = lNode->FindChild(pNodeName);
+				}
+				else
+				{
+					foundNode = lNode->FindChild(pNodeName, false);
+				}
+				if (foundNode == NULL)
+				{
+					//throw gcnew Exception(gcnew String("Couldn't find path ") + path);
+					return NULL;
+				}
+				lNode = foundNode;
+			}
+			finally
+			{
+				Marshal::FreeHGlobal((IntPtr)pNodeName);
+			}
+		}
+		return lNode;
+	}
+
+	FbxFileTexture* Fbx::Exporter::ExportTexture(ImportedTexture^ matTex)
 	{
 		FbxFileTexture* pTex = NULL;
 
@@ -694,20 +710,14 @@ namespace AssetStudio
 		return pTex;
 	}
 
-	void Fbx::Exporter::LinkTexture(ImportedMaterial^ mat, int attIndex, FbxFileTexture* pTexture, FbxProperty& prop)
+	void Fbx::Exporter::LinkTexture(ImportedMaterialTexture^ texture, FbxFileTexture* pTexture, FbxProperty& prop)
 	{
-		if (mat->TexOffsets != nullptr)
-		{
-			pTexture->SetTranslation(mat->TexOffsets[attIndex].X, mat->TexOffsets[attIndex].Y);
-		}
-		if (mat->TexScales != nullptr)
-		{
-			pTexture->SetScale(mat->TexScales[attIndex].X, mat->TexScales[attIndex].Y);
-		}
+		pTexture->SetTranslation(texture->Offset.X, texture->Offset.Y);
+		pTexture->SetScale(texture->Scale.X, texture->Scale.Y);
 		prop.ConnectSrcObject(pTexture);
 	}
 
-	void Fbx::Exporter::ExportAnimations(bool EulerFilter, float filterPrecision, bool flatInbetween)
+	void Fbx::Exporter::ExportAnimations(bool eulerFilter, float filterPrecision, bool flatInbetween)
 	{
 		auto importedAnimationList = imported->AnimationList;
 		if (importedAnimationList == nullptr)
@@ -715,7 +725,7 @@ namespace AssetStudio
 			return;
 		}
 
-		FbxAnimCurveFilterUnroll* lFilter = EulerFilter ? new FbxAnimCurveFilterUnroll() : NULL;
+		FbxAnimCurveFilterUnroll* lFilter = eulerFilter ? new FbxAnimCurveFilterUnroll() : NULL;
 
 		for (int i = 0; i < importedAnimationList->Count; i++)
 		{
@@ -738,7 +748,7 @@ namespace AssetStudio
 		}
 	}
 
-	void Fbx::Exporter::ExportKeyframedAnimation(ImportedKeyframedAnimation^ parser, FbxString& kTakeName, FbxAnimCurveFilterUnroll* EulerFilter, float filterPrecision, bool flatInbetween)
+	void Fbx::Exporter::ExportKeyframedAnimation(ImportedKeyframedAnimation^ parser, FbxString& kTakeName, FbxAnimCurveFilterUnroll* eulerFilter, float filterPrecision, bool flatInbetween)
 	{
 		List<ImportedAnimationKeyframedTrack^>^ pAnimationList = parser->TrackList;
 
@@ -751,187 +761,77 @@ namespace AssetStudio
 		for (int j = 0; j < pAnimationList->Count; j++)
 		{
 			ImportedAnimationKeyframedTrack^ keyframeList = pAnimationList[j];
-			String^ name = keyframeList->Name;
-			int dotPos = name->IndexOf('.');
-			if (dotPos >= 0 && !ImportedHelpers::FindFrame(name, imported->FrameList[0]))
+			FbxNode* pNode = FindNodeByPath(keyframeList->Path, true);
+			if (pNode != nullptr)
 			{
-				name = name->Substring(0, dotPos);
-			}
-			FbxNode* pNode = NULL;
-			char* pName = NULL;
-			try
-			{
-				pName = StringToCharArray(name);
-				pNode = pScene->GetRootNode()->FindChild(pName);
-			}
-			finally
-			{
-				Marshal::FreeHGlobal((IntPtr)pName);
-			}
+				FbxAnimCurve* lCurveSX = pNode->LclScaling.GetCurve(lAnimLayer, FBXSDK_CURVENODE_COMPONENT_X, true);
+				FbxAnimCurve* lCurveSY = pNode->LclScaling.GetCurve(lAnimLayer, FBXSDK_CURVENODE_COMPONENT_Y, true);
+				FbxAnimCurve* lCurveSZ = pNode->LclScaling.GetCurve(lAnimLayer, FBXSDK_CURVENODE_COMPONENT_Z, true);
+				FbxAnimCurve* lCurveRX = pNode->LclRotation.GetCurve(lAnimLayer, FBXSDK_CURVENODE_COMPONENT_X, true);
+				FbxAnimCurve* lCurveRY = pNode->LclRotation.GetCurve(lAnimLayer, FBXSDK_CURVENODE_COMPONENT_Y, true);
+				FbxAnimCurve* lCurveRZ = pNode->LclRotation.GetCurve(lAnimLayer, FBXSDK_CURVENODE_COMPONENT_Z, true);
+				FbxAnimCurve* lCurveTX = pNode->LclTranslation.GetCurve(lAnimLayer, FBXSDK_CURVENODE_COMPONENT_X, true);
+				FbxAnimCurve* lCurveTY = pNode->LclTranslation.GetCurve(lAnimLayer, FBXSDK_CURVENODE_COMPONENT_Y, true);
+				FbxAnimCurve* lCurveTZ = pNode->LclTranslation.GetCurve(lAnimLayer, FBXSDK_CURVENODE_COMPONENT_Z, true);
 
-				if (pNode != NULL)
+				lCurveSX->KeyModifyBegin();
+				lCurveSY->KeyModifyBegin();
+				lCurveSZ->KeyModifyBegin();
+				lCurveRX->KeyModifyBegin();
+				lCurveRY->KeyModifyBegin();
+				lCurveRZ->KeyModifyBegin();
+				lCurveTX->KeyModifyBegin();
+				lCurveTY->KeyModifyBegin();
+				lCurveTZ->KeyModifyBegin();
+
+				FbxTime lTime;
+
+				for each (auto Scaling in keyframeList->Scalings)
 				{
-					FbxAnimCurve* lCurveSX = pNode->LclScaling.GetCurve(lAnimLayer, FBXSDK_CURVENODE_COMPONENT_X, true);
-					FbxAnimCurve* lCurveSY = pNode->LclScaling.GetCurve(lAnimLayer, FBXSDK_CURVENODE_COMPONENT_Y, true);
-					FbxAnimCurve* lCurveSZ = pNode->LclScaling.GetCurve(lAnimLayer, FBXSDK_CURVENODE_COMPONENT_Z, true);
-					FbxAnimCurve* lCurveRX = pNode->LclRotation.GetCurve(lAnimLayer, FBXSDK_CURVENODE_COMPONENT_X, true);
-					FbxAnimCurve* lCurveRY = pNode->LclRotation.GetCurve(lAnimLayer, FBXSDK_CURVENODE_COMPONENT_Y, true);
-					FbxAnimCurve* lCurveRZ = pNode->LclRotation.GetCurve(lAnimLayer, FBXSDK_CURVENODE_COMPONENT_Z, true);
-					FbxAnimCurve* lCurveTX = pNode->LclTranslation.GetCurve(lAnimLayer, FBXSDK_CURVENODE_COMPONENT_X, true);
-					FbxAnimCurve* lCurveTY = pNode->LclTranslation.GetCurve(lAnimLayer, FBXSDK_CURVENODE_COMPONENT_Y, true);
-					FbxAnimCurve* lCurveTZ = pNode->LclTranslation.GetCurve(lAnimLayer, FBXSDK_CURVENODE_COMPONENT_Z, true);
+					lTime.SetSecondDouble(Scaling->time);
 
-					lCurveSX->KeyModifyBegin();
-					lCurveSY->KeyModifyBegin();
-					lCurveSZ->KeyModifyBegin();
-					lCurveRX->KeyModifyBegin();
-					lCurveRY->KeyModifyBegin();
-					lCurveRZ->KeyModifyBegin();
-					lCurveTX->KeyModifyBegin();
-					lCurveTY->KeyModifyBegin();
-					lCurveTZ->KeyModifyBegin();
-
-					FbxTime lTime;
-
-					for each (auto Scaling in keyframeList->Scalings)
-					{
-						lTime.SetSecondDouble(Scaling->time);
-
-						lCurveSX->KeySet(lCurveSX->KeyAdd(lTime), lTime, Scaling->value.X);
-						lCurveSY->KeySet(lCurveSY->KeyAdd(lTime), lTime, Scaling->value.Y);
-						lCurveSZ->KeySet(lCurveSZ->KeyAdd(lTime), lTime, Scaling->value.Z);
-					}
-					for each (auto Rotation in keyframeList->Rotations)
-					{
-						lTime.SetSecondDouble(Rotation->time);
-
-						lCurveRX->KeySet(lCurveRX->KeyAdd(lTime), lTime, Rotation->value.X);
-						lCurveRY->KeySet(lCurveRY->KeyAdd(lTime), lTime, Rotation->value.Y);
-						lCurveRZ->KeySet(lCurveRZ->KeyAdd(lTime), lTime, Rotation->value.Z);
-					}
-					for each (auto Translation in keyframeList->Translations)
-					{
-						lTime.SetSecondDouble(Translation->time);
-
-						lCurveTX->KeySet(lCurveTX->KeyAdd(lTime), lTime, Translation->value.X);
-						lCurveTY->KeySet(lCurveTY->KeyAdd(lTime), lTime, Translation->value.Y);
-						lCurveTZ->KeySet(lCurveTZ->KeyAdd(lTime), lTime, Translation->value.Z);
-					}
-
-					lCurveSX->KeyModifyEnd();
-					lCurveSY->KeyModifyEnd();
-					lCurveSZ->KeyModifyEnd();
-					lCurveRX->KeyModifyEnd();
-					lCurveRY->KeyModifyEnd();
-					lCurveRZ->KeyModifyEnd();
-					lCurveTX->KeyModifyEnd();
-					lCurveTY->KeyModifyEnd();
-					lCurveTZ->KeyModifyEnd();
-
-					if (EulerFilter)
-					{
-						FbxAnimCurve* lCurve[3];
-						lCurve[0] = lCurveRX;
-						lCurve[1] = lCurveRY;
-						lCurve[2] = lCurveRZ;
-						EulerFilter->Reset();
-						EulerFilter->SetQualityTolerance(filterPrecision);
-						EulerFilter->Apply(lCurve, 3);
-					}
-
-					if (keyframeList->Curve->Count > 0)
-					{
-						FbxNode* pMeshNode = pNode->GetChild(0);
-						FbxMesh* pMesh = pMeshNode ? pMeshNode->GetMesh() : NULL;
-						if (pMesh)
-						{
-							name = keyframeList->Name->Substring(dotPos + 1);
-							int numBlendShapes = pMesh->GetDeformerCount(FbxDeformer::eBlendShape);
-							for (int bsIdx = 0; bsIdx < numBlendShapes; bsIdx++)
-							{
-								FbxBlendShape* lBlendShape = (FbxBlendShape*)pMesh->GetDeformer(bsIdx, FbxDeformer::eBlendShape);
-								int numChannels = lBlendShape->GetBlendShapeChannelCount();
-								float flatMinStrength = 0, flatMaxStrength;
-								String^ shapeName = nullptr;
-								for (int chnIdx = 0; chnIdx < numChannels; chnIdx++)
-								{
-									FbxBlendShapeChannel* lChannel = lBlendShape->GetBlendShapeChannel(chnIdx);
-									String^ keyframeName;
-									if (!flatInbetween)
-									{
-										keyframeName = gcnew String(lChannel->GetName());
-									}
-									else
-									{
-										shapeName = gcnew String(lChannel->GetTargetShape(0)->GetName());
-										keyframeName = shapeName->Substring(0, shapeName->LastIndexOf("_"));
-									}
-									if (keyframeName == name)
-									{
-										FbxAnimCurve* lCurve = lChannel->DeformPercent.GetCurve(lAnimLayer, true);
-										if (flatInbetween)
-										{
-											FbxProperty weightProp;
-											WITH_MARSHALLED_STRING
-											(
-												weightName,
-												shapeName + ".Weight",
-												weightProp = pMesh->FindProperty(weightName);
-											);
-											if (weightProp.IsValid())
-											{
-												flatMaxStrength = (float)weightProp.Get<double>();
-											}
-											else
-											{
-												flatMaxStrength = 100;
-											}
-										}
-										lCurve->KeyModifyBegin();
-										for each (auto Curve in keyframeList->Curve)
-										{
-											lTime.SetSecondDouble(Curve->time);
-
-											auto keySetIndex = lCurve->KeyAdd(lTime);
-
-											if (!flatInbetween)
-											{
-												lCurve->KeySet(keySetIndex, lTime, Curve->value);
-											}
-											else
-											{
-												float val = Curve->value;
-												if (val >= flatMinStrength && val <= flatMaxStrength)
-												{
-													val = (val - flatMinStrength) * 100 / (flatMaxStrength - flatMinStrength);
-												}
-												else if (val < flatMinStrength)
-												{
-													val = 0;
-												}
-												else if (val > flatMaxStrength)
-												{
-													val = 100;
-												}
-												lCurve->KeySet(keySetIndex, lTime, val);
-											}
-										}
-										lCurve->KeyModifyEnd();
-										if (!flatInbetween)
-										{
-											bsIdx = numBlendShapes;
-											break;
-										}
-										else
-										{
-											flatMinStrength = flatMaxStrength;
-										}
-									}
-								}
-							}
-						}
-					}
+					lCurveSX->KeySet(lCurveSX->KeyAdd(lTime), lTime, Scaling->value.X);
+					lCurveSY->KeySet(lCurveSY->KeyAdd(lTime), lTime, Scaling->value.Y);
+					lCurveSZ->KeySet(lCurveSZ->KeyAdd(lTime), lTime, Scaling->value.Z);
 				}
+				for each (auto Rotation in keyframeList->Rotations)
+				{
+					lTime.SetSecondDouble(Rotation->time);
+
+					lCurveRX->KeySet(lCurveRX->KeyAdd(lTime), lTime, Rotation->value.X);
+					lCurveRY->KeySet(lCurveRY->KeyAdd(lTime), lTime, Rotation->value.Y);
+					lCurveRZ->KeySet(lCurveRZ->KeyAdd(lTime), lTime, Rotation->value.Z);
+				}
+				for each (auto Translation in keyframeList->Translations)
+				{
+					lTime.SetSecondDouble(Translation->time);
+
+					lCurveTX->KeySet(lCurveTX->KeyAdd(lTime), lTime, Translation->value.X);
+					lCurveTY->KeySet(lCurveTY->KeyAdd(lTime), lTime, Translation->value.Y);
+					lCurveTZ->KeySet(lCurveTZ->KeyAdd(lTime), lTime, Translation->value.Z);
+				}
+
+				lCurveSX->KeyModifyEnd();
+				lCurveSY->KeyModifyEnd();
+				lCurveSZ->KeyModifyEnd();
+				lCurveRX->KeyModifyEnd();
+				lCurveRY->KeyModifyEnd();
+				lCurveRZ->KeyModifyEnd();
+				lCurveTX->KeyModifyEnd();
+				lCurveTY->KeyModifyEnd();
+				lCurveTZ->KeyModifyEnd();
+
+				if (eulerFilter)
+				{
+					FbxAnimCurve* lCurve[3];
+					lCurve[0] = lCurveRX;
+					lCurve[1] = lCurveRY;
+					lCurve[2] = lCurveRZ;
+					eulerFilter->Reset();
+					eulerFilter->SetQualityTolerance(filterPrecision);
+					eulerFilter->Apply(lCurve, 3);
+				}
+			}
 		}
 	}
 
@@ -955,7 +855,7 @@ namespace AssetStudio
 				{
 					framePath = gcnew String(rootNode->GetName()) + "/" + framePath;
 				}
-				if (framePath == meshList->Name)
+				if (framePath == meshList->Path)
 				{
 					pBaseNode = pMeshNode;
 					break;
@@ -968,7 +868,7 @@ namespace AssetStudio
 
 			for each (ImportedMorph^ morph in imported->MorphList)
 			{
-				if (morph->Name != meshList->Name)
+				if (morph->Path != meshList->Path)
 				{
 					continue;
 				}

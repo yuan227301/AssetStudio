@@ -29,9 +29,9 @@ namespace AssetStudio
         public string m_Source;
         public long m_Offset;
         public long m_Size;
-        public byte[] m_AudioData;
+        public Lazy<byte[]> m_AudioData;
 
-        public AudioClip(AssetPreloadData preloadData, bool readData) : base(preloadData)
+        public AudioClip(ObjectReader reader) : base(reader)
         {
             if (version[0] < 5)
             {
@@ -39,17 +39,17 @@ namespace AssetStudio
                 m_Type = (AudioType)reader.ReadInt32();
                 m_3D = reader.ReadBoolean();
                 m_UseHardware = reader.ReadBoolean();
-                reader.AlignStream(4);
+                reader.AlignStream();
 
                 if (version[0] >= 4 || (version[0] == 3 && version[1] >= 2)) //3.2.0 to 5
                 {
                     int m_Stream = reader.ReadInt32();
                     m_Size = reader.ReadInt32();
                     var tsize = m_Size % 4 != 0 ? m_Size + 4 - m_Size % 4 : m_Size;
-                    if (preloadData.Size + preloadData.Offset - reader.Position != tsize)
+                    if (reader.byteSize + reader.byteStart - reader.Position != tsize)
                     {
                         m_Offset = reader.ReadInt32();
-                        m_Source = sourceFile.filePath + ".resS";
+                        m_Source = assetsFile.fullName + ".resS";
                     }
                 }
                 else
@@ -65,13 +65,12 @@ namespace AssetStudio
                 m_BitsPerSample = reader.ReadInt32();
                 m_Length = reader.ReadSingle();
                 m_IsTrackerFormat = reader.ReadBoolean();
-                reader.AlignStream(4);
+                reader.AlignStream();
                 m_SubsoundIndex = reader.ReadInt32();
                 m_PreloadAudioData = reader.ReadBoolean();
                 m_LoadInBackground = reader.ReadBoolean();
                 m_Legacy3D = reader.ReadBoolean();
-                reader.AlignStream(4);
-                m_3D = m_Legacy3D;
+                reader.AlignStream();
 
                 m_Source = reader.ReadAlignedString();
                 m_Offset = reader.ReadInt64();
@@ -79,18 +78,16 @@ namespace AssetStudio
                 m_CompressionFormat = (AudioCompressionFormat)reader.ReadInt32();
             }
 
-            if (readData)
+            ResourceReader resourceReader;
+            if (!string.IsNullOrEmpty(m_Source))
             {
-                if (!string.IsNullOrEmpty(m_Source))
-                {
-                    m_AudioData = ResourcesHelper.GetData(m_Source, sourceFile.filePath, m_Offset, (int)m_Size);
-                }
-                else
-                {
-                    if (m_Size > 0)
-                        m_AudioData = reader.ReadBytes((int)m_Size);
-                }
+                resourceReader = new ResourceReader(m_Source, assetsFile, m_Offset, (int)m_Size);
             }
+            else
+            {
+                resourceReader = new ResourceReader(reader, reader.BaseStream.Position, (int)m_Size);
+            }
+            m_AudioData = new Lazy<byte[]>(resourceReader.GetData);
         }
     }
 

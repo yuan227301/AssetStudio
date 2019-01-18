@@ -9,7 +9,6 @@ using namespace System;
 using namespace System::Collections::Generic;
 using namespace System::IO;
 using namespace System::Runtime::InteropServices;
-using namespace SharpDX;
 
 #define WITH_MARSHALLED_STRING(name,str,block)\
 	{ \
@@ -48,8 +47,8 @@ namespace AssetStudio {
 		ref class Exporter
 		{
 		public:
-			static void Export(String^ path, IImported^ imported, bool EulerFilter, float filterPrecision, bool allFrames, bool allBones, bool skins, float boneSize, bool flatInbetween, int versionIndex, bool isAscii);
-			static void ExportMorph(String^ path, IImported^ imported, bool morphMask, bool flatInbetween, bool skins, float boneSize, int versionIndex, bool isAscii);
+			static void Export(String^ path, IImported^ imported, bool eulerFilter, float filterPrecision, bool allFrames, bool allBones, bool skins, float boneSize, float scaleFactor, bool flatInbetween, int versionIndex, bool isAscii);
+			static void ExportMorph(String^ path, IImported^ imported, bool morphMask, bool flatInbetween, bool skins, float boneSize, float scaleFactor, int versionIndex, bool isAscii);
 
 		private:
 			HashSet<String^>^ frameNames;
@@ -66,19 +65,20 @@ namespace AssetStudio {
 			FbxArray<FbxFileTexture*>* pTextures;
 			FbxArray<FbxNode*>* pMeshNodes;
 
-			Exporter(String^ path, IImported^ imported, bool allFrames, bool allBones, bool skins, float boneSize, int versionIndex, bool isAscii, bool normals);
+			Exporter(String^ path, IImported^ imported, bool allFrames, bool allBones, bool skins, float boneSize, float scaleFactor, int versionIndex, bool isAscii, bool normals);
 			~Exporter();
 
-			void Exporter::LinkTexture(ImportedMaterial^ mat, int attIndex, FbxFileTexture* pTexture, FbxProperty& prop);
+			void Exporter::LinkTexture(ImportedMaterialTexture^ texture, FbxFileTexture* pTexture, FbxProperty& prop);
 			void SetJointsNode(FbxNode* pNode, HashSet<String^>^ boneNames, bool allBones);
 			HashSet<String^>^ SearchHierarchy();
 			void SearchHierarchy(ImportedFrame^ frame, HashSet<String^>^ exportFrames);
 			void SetJointsFromImportedMeshes(bool allBones);
 			void ExportFrame(FbxNode* pParentNode, ImportedFrame^ frame);
 			void ExportMesh(FbxNode* pFrameNode, ImportedMesh^ meshList, bool normals);
-			FbxFileTexture* ExportTexture(ImportedTexture^ matTex, FbxMesh* pMesh);
-			void ExportAnimations(bool EulerFilter, float filterValue, bool flatInbetween);
-			void ExportKeyframedAnimation(ImportedKeyframedAnimation^ parser, FbxString& kTakeName, FbxAnimCurveFilterUnroll* EulerFilter, float filterPrecision, bool flatInbetween);
+			FbxNode* FindNodeByPath(String ^ path, bool recursive);
+			FbxFileTexture* ExportTexture(ImportedTexture^ matTex);
+			void ExportAnimations(bool eulerFilter, float filterValue, bool flatInbetween);
+			void ExportKeyframedAnimation(ImportedKeyframedAnimation^ parser, FbxString& kTakeName, FbxAnimCurveFilterUnroll* eulerFilter, float filterPrecision, bool flatInbetween);
 			void ExportMorphs(IImported^ imported, bool morphMask, bool flatInbetween);
 		};
 	};
